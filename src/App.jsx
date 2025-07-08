@@ -3,6 +3,7 @@ import mapboxgl from 'mapbox-gl'
 
 import 'mapbox-gl/dist/mapbox-gl.css';
 import './App.css'
+import maskGeoJSON from './assets/mask.json';
 
 const INITIAL_CENTER = [
   -122.45111725386927,
@@ -100,6 +101,20 @@ function App() {
             ['get', 'min_height']
           ],
           'fill-extrusion-opacity': 0.6
+        }
+      });
+
+      mapRef.current.addSource('mask', {
+        type: 'geojson',
+        data: maskGeoJSON
+      });
+      mapRef.current.addLayer({
+        id: 'mask-layer',
+        type: 'fill',
+        source: 'mask',
+        paint: {
+          'fill-color': '#000',
+          'fill-opacity': 0.5
         }
       });
     });
