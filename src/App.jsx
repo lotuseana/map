@@ -113,8 +113,8 @@ function App() {
         type: 'fill',
         source: 'mask',
         paint: {
-          'fill-color': '#000',
-          'fill-opacity': 0.5
+          'fill-color': '#ffffff',
+          'fill-opacity': 1
         }
       });
     });
