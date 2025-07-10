@@ -21,6 +21,7 @@ function App() {
   const [zoom, setZoom] = useState(INITIAL_ZOOM)
   const [pitch, setPitch] = useState(INITIAL_PITCH)
   const [bearing, setBearing] = useState(INITIAL_BEARING)
+  const [tiltMode, setTiltMode] = useState(false)
   const maxBounds = [
     [ -122.452340, 37.725110],
     [-122.447963, 37.728228]
@@ -124,7 +125,7 @@ function App() {
     }
   }, [])
 
-  const handleButtonClick = () => {
+  const handleResetButtonClick = () => {
     mapRef.current.flyTo({
       center: INITIAL_CENTER,
       zoom: INITIAL_ZOOM,
@@ -132,16 +133,38 @@ function App() {
       bearing: INITIAL_BEARING
     })
   }
-  
-  
+
+  const handleTiltModeButtonClick = () => {
+    setTiltMode(true);
+    mapRef.current.dragPan.disable();  
+    mapRef.current.dragRotate.enable();
+ 
+  }
+
+  const handlePanModeButtonClick = () => {
+    setTiltMode(false);
+    mapRef.current.dragRotate.disable();
+    mapRef.current.dragPan.enable();
+  }
+
   return (
     <>
       <div className="sidebar">
         Longitude: {center[0].toFixed(4)} | Latitude: {center[1].toFixed(4)} | Zoom: {zoom.toFixed(2)} | Pitch: {pitch.toFixed(1)}° | Bearing: {bearing.toFixed(1)}°
       </div>
-      <button className='reset-button' onClick={handleButtonClick}>
+
+      <button className='reset-button' onClick={handleResetButtonClick}>
         Reset
       </button>
+
+      <button className='tilt-mode-button' onClick={handleTiltModeButtonClick}>
+        Tilt/Rotate
+      </button>
+
+      <button className='pan-mode-button' onClick={handlePanModeButtonClick}>
+        Pan
+      </button>
+
       <div id='map-container' ref={mapContainerRef} />
     </>
   )
