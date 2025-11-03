@@ -4,14 +4,18 @@ import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css';
 import './App.css'
 import maskGeoJSON from './assets/mask.json';
+import BATL_4 from './coords/batmale_hall/floor_4.json';
+import BATL_5 from './coords/batmale_hall/floor_5.json';
+import addBATLLayers from './mapLayers/batl'
+import addMaskLayer from './mapLayers/mask'
 
 const INITIAL_CENTER = [
-  -122.45111725386927,
-  37.726283987033476
+  -122.4513,
+  37.7257
 ]
-const INITIAL_ZOOM = 17.5
+const INITIAL_ZOOM = 16.97
 const INITIAL_PITCH = 70
-const INITIAL_BEARING = 89.9
+const INITIAL_BEARING = 89.7
 
 function App() {
   const mapRef = useRef()
@@ -21,24 +25,34 @@ function App() {
   const [zoom, setZoom] = useState(INITIAL_ZOOM)
   const [pitch, setPitch] = useState(INITIAL_PITCH)
   const [bearing, setBearing] = useState(INITIAL_BEARING)
-  const [tiltMode, setTiltMode] = useState(false)
+  const [mouseLngLat, setMouseLngLat] = useState(null) // <-- new state for hover coords
   const maxBounds = [
-    [ -122.452340, 37.725110],
+    [-122.452340, 37.725110],
     [-122.447963, 37.728228]
   ]
-
 
   useEffect(() => {
     mapboxgl.accessToken = 'pk.eyJ1IjoibG90dXNlYW5hIiwiYSI6ImNtY2hsbHoweTB1cnoycW9keTc4dXRwdTIifQ.P3V0kXXqjsTDRBs3jTWSnA'
     mapRef.current = new mapboxgl.Map({
       container: mapContainerRef.current,
-      center: center, 
+      center: center,
       zoom: zoom,
       pitch: pitch, // Add 3D tilt (0 = flat, 60 = very steep)
       bearing: bearing, // Rotation (0 = north up)
-      style: 'mapbox://styles/mapbox/streets-v12',
-      maxBounds: maxBounds
+      style: 'mapbox://styles/mapbox/light-v11',
     });
+
+    // show precise coords where mouse is hovering
+    const onMouseMove = (e) => {
+      // Mapbox event provides e.lngLat with high precision numbers
+      setMouseLngLat([e.lngLat.lng, e.lngLat.lat])
+    }
+    const onMouseLeave = () => setMouseLngLat(null)
+    mapRef.current.on('mousemove', onMouseMove)
+    // also clear when pointer leaves the map container
+    if (mapContainerRef.current) {
+      mapContainerRef.current.addEventListener('mouseleave', onMouseLeave)
+    }
 
     mapRef.current.on('move', () => {
       // get the current center coordinates and zoom level from the map
@@ -48,7 +62,7 @@ function App() {
       const mapBearing = mapRef.current.getBearing()
 
       // update state
-      setCenter([ mapCenter.lng, mapCenter.lat ])
+      setCenter([mapCenter.lng, mapCenter.lat])
       setZoom(mapZoom)
       setPitch(mapPitch)
       setBearing(mapBearing)
@@ -56,24 +70,8 @@ function App() {
 
     // Add 3D terrain and buildings when map loads
     mapRef.current.on('load', () => {
-      // Add 3D terrain
-      mapRef.current.addSource('mapbox-terrain', {
-        'type': 'vector',
-        'url': 'mapbox://mapbox.mapbox-terrain-v2'
-      });
-      
-      mapRef.current.addLayer({
-        'id': 'terrain',
-        'source': 'mapbox-terrain',
-        'source-layer': 'contour',
-        'type': 'line',
-        'paint': {
-          'line-color': '#ff11aa',
-          'line-width': 1
-        }
-      });
+      mapRef.current.setTerrain(null);
 
-      // Add 3D building extrusions
       mapRef.current.addLayer({
         'id': '3d-buildings',
         'source': 'composite',
@@ -101,27 +99,33 @@ function App() {
             15.05,
             ['get', 'min_height']
           ],
-          'fill-extrusion-opacity': 0.6
+          'fill-extrusion-opacity': 0.3
         }
       });
 
-      mapRef.current.addSource('mask', {
-        type: 'geojson',
-        data: maskGeoJSON
-      });
-      mapRef.current.addLayer({
-        id: 'mask-layer',
-        type: 'fill',
-        source: 'mask',
-        paint: {
-          'fill-color': '#ffffff',
-          'fill-opacity': 1
-        }
-      });
+      // find a base symbol layer so we can match label style
+      const styleLayers = mapRef.current.getStyle().layers || [];
+      const baseLabelLayer = styleLayers.find(layer =>
+        layer.type === 'symbol' && layer.layout && (layer.layout['text-field'] || layer.layout['icon-image'])
+      );
+      const baseLayout = baseLabelLayer?.layout || {};
+      const basePaint = baseLabelLayer?.paint || {};
+
+      // add mask (separate file)
+      addMaskLayer(mapRef.current, maskGeoJSON);
+      // add BATL layers (separate file)
+      addBATLLayers(mapRef.current, BATL_4, BATL_5, baseLayout, basePaint);
     });
 
     return () => {
-      mapRef.current.remove()
+      // remove event listeners and clean up
+      if (mapRef.current) {
+        mapRef.current.off('mousemove', onMouseMove)
+      }
+      if (mapContainerRef.current) {
+        mapContainerRef.current.removeEventListener('mouseleave', onMouseLeave)
+      }
+      if (mapRef.current) mapRef.current.remove()
     }
   }, [])
 
@@ -134,19 +138,6 @@ function App() {
     })
   }
 
-  const handleTiltModeButtonClick = () => {
-    setTiltMode(true);
-    mapRef.current.dragPan.disable();  
-    mapRef.current.dragRotate.enable();
- 
-  }
-
-  const handlePanModeButtonClick = () => {
-    setTiltMode(false);
-    mapRef.current.dragRotate.disable();
-    mapRef.current.dragPan.enable();
-  }
-
   return (
     <>
       <div className="sidebar">
@@ -157,21 +148,29 @@ function App() {
         Reset
       </button>
 
-      <button className='tilt-mode-button' onClick={handleTiltModeButtonClick}>
-        Tilt/Rotate
-      </button>
-
-      <button className='pan-mode-button' onClick={handlePanModeButtonClick}>
-        Pan
-      </button>
-
       <div id='map-container' ref={mapContainerRef} />
+
+      {/* mouse coords UI (bottom-right). shows high-precision coordinates while hovering */}
+      <div
+        style={{
+          position: 'absolute',
+          right: 12,
+          bottom: 12,
+          padding: '6px 8px',
+          background: 'rgba(255,255,255,0.9)',
+          color: '#111',
+          fontSize: 12,
+          borderRadius: 4,
+          boxShadow: '0 1px 2px rgba(0,0,0,0.15)',
+          pointerEvents: 'none'
+        }}
+      >
+        {mouseLngLat
+          ? `${mouseLngLat[0].toFixed(7)}, ${mouseLngLat[1].toFixed(7)}`
+          : 'Hover map to see coords'}
+      </div>
     </>
   )
-  
-  
-  
 }
-
 
 export default App
